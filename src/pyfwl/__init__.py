@@ -1,2 +1,2 @@
-from pyfw.fw_lasso import *
-from pyfw.utils import *
+from pyfwl.fw_lasso import *
+from pyfwl.utils import *

@@ -4,7 +4,7 @@ import typing as typ
 
 import numpy as np
 
-import pyfw.utils as ut
+import pyfwl.utils as ut
 import pycsou.abc.operator as pyco
 import pycsou.abc.solver as pycs
 import pycsou.operator as pycop
