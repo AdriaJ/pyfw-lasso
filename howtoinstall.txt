@@ -1,0 +1,10 @@
+#!/bin/bash
+
+git clone git@github.com:AdriaJ/pyfw-lasso.git
+cd pyfw-lasso
+
+conda create --name pyfwl --strict-channel-priority --channel=conda-forge --file=conda/requirements.txt
+conda activate pyfwl
+
+pip install -e .
+pytest
