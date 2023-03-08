@@ -8,3 +8,4 @@ matplotlib >= 3.3.*, < 4
 tqdm >= 4.61.*, < 5
 statsmodels >= 0.13.*, < 1
 jupyter
+pytest
