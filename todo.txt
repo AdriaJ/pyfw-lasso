@@ -1,0 +1,11 @@
+--------
+Refactor
+--------
+* Verify the example file for VFW and PFW
+* Verify the example file for the positivity constraint
+
+
+----
+Code
+----
+* Use a sparse implementation for the intermediate iterates.
