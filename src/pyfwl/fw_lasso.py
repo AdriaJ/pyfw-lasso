@@ -61,7 +61,7 @@ class GenericFWforLasso(pycs.Solver):
             0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp
         )
         self._penalty = self.lambda_ * pycop.L1Norm(dim=self.forwardOp.shape[1])
-        self._bound = 0.5 * pycop.SquaredL2Norm().apply(data)[0] / self.lambda_
+        self._bound = 0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(data)[0] / self.lambda_
 
     def m_init(self, **kwargs):
         xp = pycu.get_array_module(self.data)
@@ -221,14 +221,12 @@ class VanillaFWforLasso(GenericFWforLasso):
             if abs(dcv) > 1.0:
                 gamma += self.lambda_ * (mst["lift_variable"] + (abs(dcv) - 1.0) * self._bound)
                 injection = pycop.SubSample(self.forwardOp.shape[1], xp.array(new_ind)).T
-                gamma /= pycop.SquaredL2Norm().apply(
+                gamma /= pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(
                     self._bound * np.sign(dcv) * self.forwardOp(injection(xp.array(1.0))) - self.forwardOp(mst["x"])
-                )[
-                    0
-                ]  # we can use numpy (np) as dcv is a float
+                )[0]  # we can use numpy (np) as dcv is a float
             else:
                 gamma += self.lambda_ * mst["lift_variable"]
-                gamma /= pycop.SquaredL2Norm().apply(self.forwardOp(mst["x"]))[0]
+                gamma /= pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(self.forwardOp(mst["x"]))[0]
 
         if not 0 < gamma < 1:
             print("Warning, gamma value not valid: {}".format(gamma))
@@ -415,9 +413,9 @@ class PolyatomicFWforLasso(GenericFWforLasso):
             if abs(corr) <= self.lambda_:
                 mst["x"] = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
             elif corr > self.lambda_:
-                mst["x"] = ((corr - self.lambda_) / pycop.SquaredL2Norm().apply(column)[0]) * tmp
+                mst["x"] = ((corr - self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]) * tmp
             else:
-                mst["x"] = ((corr + self.lambda_) / pycop.SquaredL2Norm().apply(column)[0]) * tmp
+                mst["x"] = ((corr + self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]) * tmp
         else:
             mst["x"] = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
 
