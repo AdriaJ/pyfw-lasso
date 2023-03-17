@@ -7,12 +7,12 @@ import numpy as np
 
 import pycsou.abc as pyca
 import pycsou.operator as pycop
-import pyfw
+import pyfwl
 import pycsou.opt.stop as pycos
 from pycsou.opt.solver.pgd import PGD
 
-# matplotlib.use("Qt5Agg")
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
+matplotlib.use("Qt5Agg")
 
 seed = None  # for reproducibility
 
@@ -28,7 +28,7 @@ lambda_factor = 0.1
 # Parameters of the solver
 remove = True
 eps = 1e-4
-min_iterations = 1
+min_iterations = 10
 tmax = 15.0
 ms_threshold = 0.8
 init_correction = 1e-1
@@ -44,7 +44,7 @@ stop_crit = pycos.RelError(
     satisfy_all=True,
 )
 # alternative stopping criteria
-dcv = pyfw.dcvStoppingCrit(eps_dcv)
+dcv = pyfwl.dcvStoppingCrit(eps_dcv)
 # Minimum number of iterations
 min_iter = pycos.MaxIter(n=min_iterations)
 
@@ -72,8 +72,8 @@ if __name__ == "__main__":
 
     lambda_ = lambda_factor * np.linalg.norm(op.T(measurements), np.infty)  # rule of thumb to define lambda
 
-    vfw = pyfw.VanillaFWforLasso(measurements, op, lambda_, step_size="optimal", show_progress=False)
-    pfw = pyfw.PolyatomicFWforLasso(
+    vfw = pyfwl.VFWLasso(measurements, op, lambda_, step_size="optimal", show_progress=False)
+    pfw = pyfwl.PFWLasso(
         measurements,
         op,
         lambda_,
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     print("\tSolved in {:.3f} seconds".format(time_p))
 
     # Explicit definition of the objective function for APGD
-    data_fid = 0.5 * pycop.SquaredL2Norm().argshift(-measurements) * op
+    data_fid = 0.5 * pycop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
     # it seems necessary to manually lunch the evaluation of the diff lipschitz constant
     data_fid.diff_lipschitz()
     regul = lambda_ * pycop.L1Norm()
