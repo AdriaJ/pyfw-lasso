@@ -15,12 +15,12 @@ import pycsou.util.ptype as pyct
 from pycsou.opt.solver.pgd import PGD
 
 __all__ = [
-    "VanillaFWforLasso",
-    "PolyatomicFWforLasso",
+    "VFWLasso",
+    "PFWLasso",
     "dcvStoppingCrit",
 ]
 
-class GenericFWforLasso(pycs.Solver):
+class _GenericFWLasso(pycs.Solver):
     r"""
     Base class for Frank-Wolfe algorithms (FW) for the LASSO problem.
 
@@ -111,7 +111,7 @@ class GenericFWforLasso(pycs.Solver):
         super().fit(track_objective=track_objective, **kwargs)
 
 
-class VanillaFWforLasso(GenericFWforLasso):
+class VFWLasso(_GenericFWLasso):
     r"""
     Vanilla version of the Frank-Wolfe algorithm (FW) specifically design to solve the LASSO problem of the form
 
@@ -199,7 +199,7 @@ class VanillaFWforLasso(GenericFWforLasso):
             raise ValueError(f"step_size must be in ['regular', 'optimal'], got {step_size}.")
 
     def m_init(self, **kwargs):
-        super(VanillaFWforLasso, self).m_init(**kwargs)
+        super(VFWLasso, self).m_init(**kwargs)
         self._mstate["lift_variable"] = 0.0  # kept as a float and not an array.
 
     def m_step(self):
@@ -239,7 +239,7 @@ class VanillaFWforLasso(GenericFWforLasso):
             mst["lift_variable"] += gamma * self._bound
 
 
-class PolyatomicFWforLasso(GenericFWforLasso):
+class PFWLasso(_GenericFWLasso):
     r"""
     Polyatomic version of the Frank-Wolfe algorithm (FW) specifically design to solve the LASSO problem of the form
 
@@ -356,7 +356,7 @@ class PolyatomicFWforLasso(GenericFWforLasso):
 
 
     def m_init(self, **kwargs):
-        super(PolyatomicFWforLasso, self).m_init(**kwargs)
+        super(PFWLasso, self).m_init(**kwargs)
         xp = pycu.get_array_module(self._mstate["x"])
         mst = self._mstate
         mst["positions"] = xp.array([], dtype="int32")
@@ -478,6 +478,10 @@ class PolyatomicFWforLasso(GenericFWforLasso):
         return 0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp * injection
 
     def post_process(self):
+        """
+        Solve the LASSO objective problem constraining the support of the solution to be included within the support of
+        the last PFW iterate. The stopping criterion of the problem is set to the final precision of reweighting steps.
+        """
         mst = self._mstate
         mst["x"] = self.rs_correction(mst["positions"], self._final_correction_prec)
 
