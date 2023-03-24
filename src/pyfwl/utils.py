@@ -1,7 +1,5 @@
 """
 This file implements a few common operators, useful in the development of PFW for the LASSO problem.
-This file is only temporary, and these methods should later on be imported from the tested implementations provided by
-Pycsou (when they will be available).
 """
 
 import typing as typ
