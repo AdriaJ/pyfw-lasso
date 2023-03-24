@@ -134,6 +134,9 @@ class _GenericFWLasso(pycs.Solver):
     def rs_forwardOp(self, support_indices: pyct.NDArray) -> pyco.LinOp:
         """
         Used in order to apply the forward operator to a sparse input.
+
+        Needs to be over-written in case of a more efficient implementation of the reduced support forward operator
+        implementation (only in the forward pass).
         """
         injection = pycop.SubSample(self.forwardOp.shape[1], support_indices).T
         return self.forwardOp * injection
