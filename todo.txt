@@ -1,8 +1,7 @@
 --------
 Refactor
 --------
-* Verify the example file for VFW and PFW
-* Verify the example file for the positivity constraint
+* Do an example file with overwriting the rs_forward_op and compare wit the naive injection implementation.
 
 
 ----
