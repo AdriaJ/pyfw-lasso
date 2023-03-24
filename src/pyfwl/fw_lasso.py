@@ -107,6 +107,7 @@ class _GenericFWLasso(pycs.Solver):
             self._data_fidelity.diff_lipschitz(tol=1e-3)
             print("Computation of diff_lipschitz takes {:.4f}".format(time.time() - lipschitz_time))
         else:
+            print("diff_lipschitz constant provided.")
             self._data_fidelity._diff_lipschitz = l_constant
         super().fit(track_objective=track_objective, **kwargs)
 
