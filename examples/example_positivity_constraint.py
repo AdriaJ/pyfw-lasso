@@ -1,3 +1,8 @@
+"""
+In order to enforce positivity on the solutions provided by the FW algorithms, one simple needs to provide the keyword
+`positivity_c` to the `.fit` ffunction with value `True`.
+"""
+
 import datetime as dt
 import time
 
@@ -5,13 +10,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-import pycsou._dev.fw_utils as pycdevu
 import pycsou.abc as pyca
-import pycsou.opt.solver.fw_lasso as pycfw
+import pycsou.operator as pycop
 import pycsou.opt.stop as pycos
-from pycsou.abc.operator import LinOp
-from pycsou.opt.solver.pds import CondatVu
 from pycsou.opt.solver.pgd import PGD
+
+import pyfwl
 
 matplotlib.use("Qt5Agg")
 
@@ -52,11 +56,13 @@ if __name__ == "__main__":
 
     mat = rng.normal(size=(L, N))  # forward matrix
     indices = rng.choice(N, size=k)  # indices of active components in the source
-    injection = pycdevu.SubSampling(size=N, sampling_indices=indices).T
-    source = injection((rng.normal(size=k)))  # sparse source
+    injection = pycop.SubSample(N, indices).T
+    source = np.abs(injection((rng.normal(size=k))))  # sparse source
 
     op = pyca.LinOp.from_array(mat)
-    op.lipschitz()
+    start = time.time()
+    lip = op.lipschitz()
+    print("Computation of the Lipschitz constant in {:.2f}".format(time.time()-start))
     noiseless_measurements = op(source)
     std = np.max(np.abs(noiseless_measurements)) * 10 ** (-psnr / 20)
     noise = rng.normal(0, std, size=L)
@@ -64,15 +70,15 @@ if __name__ == "__main__":
 
     lambda_ = lambda_factor * np.linalg.norm(op.T(measurements), np.infty)  # rule of thumb to define lambda
 
-    vfw = pycfw.VanillaFWforLasso(measurements, op, lambda_, step_size="optimal", show_progress=False)
-    pfw = pycfw.PolyatomicFWforLasso(
+    vfw = pyfwl.VFWLasso(measurements, op, lambda_, step_size="optimal", show_progress=False)
+    pfw = pyfwl.PFWLasso(
         measurements, op, lambda_, ms_threshold=0.9, remove_positions=remove, show_progress=False
     )
 
     print("\nVanilla FW: Solving ...")
     start = time.time()
     # vfw.fit(stop_crit=min_iter & vfw.default_stop_crit())
-    vfw.fit(stop_crit=full_stop)
+    vfw.fit(stop_crit=full_stop, diff_lipschitz=lip**2)
     data_v, hist_v = vfw.stats()
     time_v = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_v))
@@ -80,16 +86,14 @@ if __name__ == "__main__":
     print("Polyatomic FW: Solving ...")
     start = time.time()
     # pfw.fit(stop_crit=min_iter & pfw.default_stop_crit())
-    pfw.fit(stop_crit=full_stop)
+    pfw.fit(stop_crit=full_stop, diff_lipschitz=lip**2)
     data_p, hist_p = pfw.stats()
     time_p = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_p))
 
     # Explicit definition of the objective function for APGD
-    data_fid = 0.5 * pycdevu.SquaredL2Norm().argshift(-measurements) * op
-    # it seems necessary to manually lunch the evaluation of the diff lipschitz constant
-    data_fid.diff_lipschitz()
-    regul = lambda_ * pycdevu.L1Norm()
+    data_fid = 0.5 * pycop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
+    regul = lambda_ * pycop.L1Norm()
 
     print("Solving with APGD: ...")
     pgd = PGD(data_fid, regul, show_progress=False)
@@ -98,37 +102,42 @@ if __name__ == "__main__":
         x0=np.zeros(N, dtype="float64"),
         stop_crit=(min_iter & pgd.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
+        tau=1/lip**2
     )
     data_apgd, hist_apgd = pgd.stats()
     time_pgd = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_pgd))
 
-    print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}".format(data_v["dcv"], data_p["dcv"]))
+    apgd_dcv = np.abs(op.adjoint(measurements - op(data_apgd["x"]))).max()/lambda_
+    print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}\n\tAPGD: {:.4f}".format(data_v["dcv"],
+                                                                                                  data_p["dcv"],
+                                                                                                  apgd_dcv))
     print(
-        "Final value of objective:\n\tAPGD: {:.4f}\n\tVFW : {:.4f}\n\tPFW : {:.4f}".format(
-            hist_apgd[-1][-1], hist_v[-1][-1], hist_p[-1][-1]
+        "Final value of objective:\n\tVFW : {:.4f}\n\tPFW : {:.4f}\n\tAPGD: {:.4f}".format(
+            hist_v[-1][-1], hist_p[-1][-1], hist_apgd[-1][-1]
         )
     )
 
-    print("Positivity constraint:")
-    print("\tVanilla FW: Solving ...")
+    print("\n\nPositivity constraint:\n")
+    print("Vanilla FW: Solving ...")
     # Solving the same problems with positivity constraint
-    vfw.fit(stop_crit=full_stop, positivity_constraint=True)
+    vfw.fit(stop_crit=full_stop, positivity_constraint=True, diff_lipschitz=lip**2)
     data_v_pos, hist_v_pos = vfw.stats()
     print("\tSolved in {:.3f} seconds".format(hist_v_pos["duration"][-1]))
 
-    print("\tPolyatomic FW: Solving ...")
-    pfw.fit(stop_crit=full_stop, positivity_constraint=True)
+    print("Polyatomic FW: Solving ...")
+    pfw.fit(stop_crit=full_stop, positivity_constraint=True, diff_lipschitz=lip**2)
     data_p_pos, hist_p_pos = pfw.stats()
     print("\tSolved in {:.3f} seconds".format(hist_p_pos["duration"][-1]))
 
-    print("\tSolving with PGD: ...")
-    posRegul = lambda_ * pycdevu.L1NormPositivityConstraint(shape=(1, None))
+    print("Solving with PGD: ...")
+    posRegul = lambda_ * pyfwl.L1NormPositivityConstraint(shape=(1, None))
     pgd_pos = PGD(data_fid, posRegul, show_progress=False)
     pgd_pos.fit(
         x0=np.zeros(N, dtype="float64"),
         stop_crit=(min_iter & pgd_pos.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
+        tau=1/lip**2,
     )
     # cv = CondatVu(f=data_fid, g=regul, h=pycdevu.NonNegativeOrthant(shape=(1, N)), show_progress=True, verbosity=100)
     # cv.fit(
@@ -140,35 +149,33 @@ if __name__ == "__main__":
     data_pgd_pos, hist_pgd_pos = pgd_pos.stats()
     print("\tSolved in {:.3f} seconds".format(hist_pgd_pos["duration"][-1]))
 
-    print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}".format(data_v_pos["dcv"], data_p_pos["dcv"]))
+    apgd_pos_dcv = np.abs(op.adjoint(measurements - op(data_apgd["x"]))).max()/lambda_
+    print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}\n\tAPGD: {:.4f}".format(data_v_pos["dcv"],
+                                                                                                  data_p_pos["dcv"],
+                                                                                                  apgd_pos_dcv))
     print(
-        "Final value of objective:\n\tPDS: {:.4f}\n\tVFW : {:.4f}\n\tPFW : {:.4f}".format(
-            hist_pgd_pos[-1][-1], hist_v_pos[-1][-1], hist_p_pos[-1][-1]
+        "Final value of objective:\n\tVFW : {:.4f}\n\tPFW : {:.4f}\n\tAPGD: {:.4f}".format(
+            hist_v_pos[-1][-1], hist_p_pos[-1][-1], hist_pgd_pos[-1][-1]
         )
     )
     ###########################################################################################
-
-    # Bugs PDS:
-    # *init IdentityOp(dim instead of shape)
-    # *NullFunc -> NullOp
-    # *Quadratic function to import from another file
-    # * dimension of ourputof PDS
-    # * does not return a positive valued variable...
+    def supp(arr):
+        return np.where(np.abs(arr) > 1e-4)[0]
 
     plt.figure(figsize=(10, 8))
     plt.suptitle("Compare the reconstructions")
     plt.subplot(211)
-    plt.stem(source, label="source", linefmt="C0-", markerfmt="C0o")
-    plt.stem(data_apgd["x"], label="APGD", linefmt="C1:", markerfmt="C1x")
-    plt.stem(data_v["x"], label="VFW", linefmt="C2:", markerfmt="C2x")
-    plt.stem(data_p["x"], label="PFW", linefmt="C3:", markerfmt="C3x")
+    plt.stem(supp(source), source[supp(source)], label="source", linefmt="C0-", markerfmt="C0o")
+    plt.stem(supp(data_apgd["x"]), data_apgd["x"][supp(data_apgd["x"])], label="APGD", linefmt="C1:", markerfmt="C1x")
+    plt.stem(supp(data_v["x"]), data_v["x"][supp(data_v["x"])], label="VFW", linefmt="C2:", markerfmt="C2x")
+    plt.stem(supp(data_p["x"]), data_p["x"][supp(data_p["x"])], label="PFW", linefmt="C3:", markerfmt="C3x")
     plt.legend()
     plt.title("Unconstrained reconstruction")
     plt.subplot(212)
-    plt.stem(source, label="source", linefmt="C0-", markerfmt="C0o")
-    plt.stem(data_pgd_pos["x"], label="PGD", linefmt="C1:", markerfmt="C1s")
-    plt.stem(data_v_pos["x"], label="VFW", linefmt="C2:", markerfmt="C2x")
-    plt.stem(data_p_pos["x"], label="PFW", linefmt="C3:", markerfmt="C3x")
+    plt.stem(supp(source), source[supp(source)], label="source", linefmt="C0-", markerfmt="C0o")
+    plt.stem(supp(data_pgd_pos["x"]), data_pgd_pos["x"][supp(data_pgd_pos["x"])], label="APGD", linefmt="C1:", markerfmt="C1x")
+    plt.stem(supp(data_v_pos["x"]), data_v_pos["x"][supp(data_v_pos["x"])], label="VFW", linefmt="C2:", markerfmt="C2x")
+    plt.stem(supp(data_p_pos["x"]), data_p_pos["x"][supp(data_p_pos["x"])], label="PFW", linefmt="C3:", markerfmt="C3x")
     plt.legend()
     plt.title("Positivity constrained solution")
     plt.show()
