@@ -478,6 +478,63 @@ class PFWLasso(_GenericFWLasso):
         injection = pycop.SubSample(self.forwardOp.shape[1], support_indices).T
         return 0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp * injection
 
+    def diagnostics(self, log: bool=False):
+        import matplotlib.pyplot as plt
+
+        hist = self.stats()[1]
+
+        plt.figure(figsize=(15, 8))
+        plt.suptitle("Performance analysis of PolyCLEAN")
+        plt.subplot(243)
+        plt.plot(self._mstate["N_indices"], label="Support size", marker="x", alpha=.5)
+        plt.plot(self._mstate["N_candidates"], label="Candidates", marker="x", alpha=.5)
+        plt.xlabel("Iter.")
+        plt.title("Support")
+        plt.legend()
+        plt.subplot(244)
+        plt.plot(self._mstate["correction_iterations"], label="iterations", marker="o", c='#2ca02c', alpha=.5)
+        plt.ylim(bottom=0.)
+        plt.xlabel("Iter.")
+        plt.legend()
+        plt.twinx()
+        plt.plot(self._mstate["correction_durations"], label="duration", marker="x", c='#d62728', alpha=.5)
+        plt.ylim(bottom=0.)
+        plt.title("Correction iterations")
+        plt.legend()
+
+        plt.subplot(247)
+        plt.plot(hist['duration'][1:], self._mstate["N_indices"], label="Support size", marker="x", alpha=.5,)
+        plt.plot(hist['duration'][1:], self._mstate["N_candidates"], label="candidates", marker="x", alpha=.5,)
+        plt.xlim(left=0.)
+        plt.xlabel("Time (s)")
+        plt.legend()
+        plt.subplot(248)
+        plt.plot(hist['duration'][1:], self._mstate["correction_iterations"], label="iterations", marker=".",
+                 c='#2ca02c', alpha=.5)
+        plt.ylim(bottom=0.)
+        plt.xlim(left=0.)
+        plt.xlabel("Time (s)")
+        plt.legend()
+        plt.twinx()
+        plt.plot(hist['duration'][1:], self._mstate["correction_durations"], label="duration", marker="x",
+                 c='#d62728', alpha=.5)
+        plt.ylim(bottom=0.)
+        plt.xlim(left=0.)
+        plt.legend()
+
+        plt.subplot(121)
+        if log:
+            plt.yscale('log')
+        plt.scatter(hist['duration'], (hist['Memorize[objective_func]'] - hist['Memorize[objective_func]'][-1]) / (
+                hist['Memorize[objective_func]'][0] - hist['Memorize[objective_func]'][-1]), label="PolyCLEAN",
+                    s=20,
+                    marker="+")
+        plt.title('LASSO objective function')
+        plt.legend()
+        plt.xlim(left=0.)
+        plt.xlabel("Time")
+        plt.show()
+
     def post_process(self):
         """
         Solve the LASSO objective problem constraining the support of the solution to be included within the support of
