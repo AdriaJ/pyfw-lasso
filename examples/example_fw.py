@@ -64,7 +64,7 @@ if __name__ == "__main__":
     source = injection(rng.normal(size=k))  # sparse source
 
     op = pyca.LinOp.from_array(mat)
-    op.lipschitz()
+    lip = op.lipschitz()
     noiseless_measurements = op(source)
     std = np.max(np.abs(noiseless_measurements)) * 10 ** (-psnr / 20)
     noise = rng.normal(0, std, size=L)
@@ -72,7 +72,13 @@ if __name__ == "__main__":
 
     lambda_ = lambda_factor * np.linalg.norm(op.T(measurements), np.infty)  # rule of thumb to define lambda
 
-    vfw = pyfwl.VFWLasso(measurements, op, lambda_, step_size="optimal", show_progress=False)
+    vfw = pyfwl.VFWLasso(
+        measurements,
+        op,
+        lambda_,
+        step_size="optimal",
+        show_progress=False
+    )
     pfw = pyfwl.PFWLasso(
         measurements,
         op,
@@ -86,24 +92,22 @@ if __name__ == "__main__":
 
     print("\nVanilla FW: Solving ...")
     start = time.time()
-    # vfw.fit(stop_crit=min_iter & vfw.default_stop_crit())
-    vfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv)
+    vfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
+            diff_lipschitz=lip**2)
     data_v, hist_v = vfw.stats()
     time_v = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_v))
 
     print("Polyatomic FW: Solving ...")
     start = time.time()
-    # pfw.fit(stop_crit=min_iter & pfw.default_stop_crit())
-    pfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv)
+    pfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
+            diff_lipschitz=lip**2)
     data_p, hist_p = pfw.stats()
     time_p = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_p))
 
     # Explicit definition of the objective function for APGD
     data_fid = 0.5 * pycop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
-    # it seems necessary to manually lunch the evaluation of the diff lipschitz constant
-    data_fid.diff_lipschitz()
     regul = lambda_ * pycop.L1Norm()
 
     print("Solving with APGD: ...")
@@ -113,6 +117,7 @@ if __name__ == "__main__":
         x0=np.zeros(N, dtype="float64"),
         stop_crit=(min_iter & pgd.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
+        tau=1/lip**2,
     )
     data_apgd, hist_apgd = pgd.stats()
     time_pgd = time.time() - start
@@ -133,35 +138,43 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
 
-    print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}".format(data_v["dcv"], data_p["dcv"]))
+    apgd_dcv = np.abs(op.adjoint(measurements - op(data_apgd["x"]))).max()/lambda_
+    print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}\n\tAPGD: {:.4f}".format(data_v["dcv"],
+                                                                                                  data_p["dcv"],
+                                                                                                  apgd_dcv))
     print(
         "Final value of objective:\n\tAPGD: {:.4f}\n\tVFW : {:.4f}\n\tPFW : {:.4f}".format(
             hist_apgd[-1][-1], hist_v[-1][-1], hist_p[-1][-1]
         )
     )
 
-    # # Solving the same problems with another stopping criterion: DCV
-    # vfw.fit(stop_crit=(min_iter & dcv) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)))
-    # data_v_dcv, hist_v_dcv = vfw.stats()
-    #
-    # pfw.fit(stop_crit=(min_iter & dcv) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)))
-    # data_p_dcv, hist_p_dcv = pfw.stats()
+    # Solving the same problems with another stopping criterion: DCV
+    vfw.fit(stop_crit=(min_iter & dcv) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
+            diff_lipschitz=lip**2)
+    data_v_dcv, hist_v_dcv = vfw.stats()
+
+    pfw.fit(stop_crit=(min_iter & dcv) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
+            diff_lipschitz=lip**2)
+    data_p_dcv, hist_p_dcv = pfw.stats()
+
+    def indices(arr):
+        return np.where(np.abs(arr) > 1e-4)[0]
 
     plt.figure(figsize=(10, 8))
     plt.suptitle("Compare the reconstructions")
     plt.subplot(211)
-    plt.stem(source, label="source", linefmt="C0-", markerfmt="C0o")
-    plt.stem(data_apgd["x"], label="apgd", linefmt="C1:", markerfmt="C1x")
-    plt.stem(data_v["x"], label="VFW", linefmt="C2:", markerfmt="C2x")
-    plt.stem(data_p["x"], label="PFW", linefmt="C3:", markerfmt="C3x")
+    plt.stem(indices(source), source[indices(source)], label="source", linefmt="C0-", markerfmt="C0o")
+    plt.stem(indices(data_apgd["x"]), data_apgd["x"][indices(data_apgd["x"])], label="apgd", linefmt="C1:", markerfmt="C1x")
+    plt.stem(indices(data_v["x"]), data_v["x"][indices(data_v["x"])], label="VFW", linefmt="C2:", markerfmt="C2x")
+    plt.stem(indices(data_p["x"]), data_p["x"][indices(data_p["x"])], label="PFW", linefmt="C3:", markerfmt="C3x")
     plt.legend()
     plt.title("Relative improvement as stopping criterion")
     plt.subplot(212)
-    plt.stem(source, label="source", linefmt="C0-", markerfmt="C0o")
-    plt.stem(data_apgd["x"], label="apgd", linefmt="C1:", markerfmt="C1x")
-    # plt.stem(data_v_dcv["x"], label="VFW", linefmt="C2:", markerfmt="C2x")
-    # plt.stem(data_p_dcv["x"], label="PFW", linefmt="C3:", markerfmt="C3x")
-    # plt.legend()
+    plt.stem(indices(source), source[indices(source)], label="source", linefmt="C0-", markerfmt="C0o")
+    plt.stem(indices(data_apgd["x"]), data_apgd["x"][indices(data_apgd["x"])], label="apgd", linefmt="C1:", markerfmt="C1x")
+    plt.stem(indices(data_v_dcv["x"]), data_v_dcv["x"][indices(data_v_dcv["x"])], label="VFW", linefmt="C2:", markerfmt="C2x")
+    plt.stem(indices(data_p_dcv["x"]), data_p_dcv["x"][indices(data_p_dcv["x"])], label="PFW", linefmt="C3:", markerfmt="C3x")
+    plt.legend()
     plt.title("Dual certificate value as stopping criterion")
     plt.show()
 
@@ -197,12 +210,12 @@ if __name__ == "__main__":
 
     plt.subplot(212)
     plt.yscale("log")
-    # plt.plot(hist_p_dcv["duration"], hist_p_dcv["Memorize[objective_func]"], label="PFW")
-    # plt.plot(hist_v_dcv["duration"], hist_v_dcv["Memorize[objective_func]"], label="VFW")
-    # plt.plot(hist_apgd["duration"], hist_apgd["Memorize[objective_func]"], label="APGD")
-    # plt.ylabel("OFV")
-    # plt.legend()
-    # plt.title("Stop: Absolute error dcv")
+    plt.plot(hist_p_dcv["duration"], hist_p_dcv["Memorize[objective_func]"], label="PFW")
+    plt.plot(hist_v_dcv["duration"], hist_v_dcv["Memorize[objective_func]"], label="VFW")
+    plt.plot(hist_apgd["duration"], hist_apgd["Memorize[objective_func]"], label="APGD")
+    plt.ylabel("OFV")
+    plt.legend()
+    plt.title("Stop: Absolute error dcv")
     plt.show()
 
     plt.figure(figsize=(10, 8))
@@ -215,36 +228,13 @@ if __name__ == "__main__":
     plt.legend()
     plt.subplot(212)
     plt.yscale("log")
-    # plt.plot(hist_p_dcv["duration"], hist_p_dcv["AbsError[dcv]"], label="PFW")
-    # plt.plot(hist_v_dcv["duration"], hist_v_dcv["AbsError[dcv]"], label="VFW")
-    # plt.title("Stop: Absolute error dcv")
-    # plt.legend()
+    plt.plot(hist_p_dcv["duration"], hist_p_dcv["AbsError[dcv]"], label="PFW")
+    plt.plot(hist_v_dcv["duration"], hist_v_dcv["AbsError[dcv]"], label="VFW")
+    plt.title("Stop: Absolute error dcv")
+    plt.legend()
     plt.show()
-
-    # print("Solving with APGD and specified support: ...")
-    # import pycsou.operator as pycop
-    # ss = pycop.SubSample(data_fid.shape[1], np.nonzero(data_apgd['x'])[0])
-    # rspgd = PGD(data_fid * ss.T, lambda_ * pycop.L1Norm(), show_progress=False)
-    # start = time.time()
-    # rspgd.fit(
-    #     x0=np.zeros(ss.shape[0], dtype="float64"),
-    #     stop_crit=(min_iter & pgd.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
-    #     track_objective=True,
-    # )
-    # print("Done.")
-    # data_rsapgd, hist_rsapgd = rspgd.stats()
-    #
-    # plt.figure(figsize=(10, 8))
-    # plt.suptitle("Compare the reconstructions")
-    # plt.stem(source, label="source", linefmt="C0-", markerfmt="C0o")
-    # plt.stem(data_apgd["x"], label="apgd", linefmt="C1:", markerfmt="C1x")
-    # plt.stem(ss.T(data_rsapgd["x"]), label="rs apgd", linefmt="C2:", markerfmt="C2x")
-    # plt.legend()
-    # plt.show()
 
     start = time.time()
     pfw.post_process()
     print(f"Post-processing in: {time.time()-start:.4f}s")
     print(f"Final value of the objective: {pfw.objective_func()[0]:.4f}")
-
-# todo change the reweighting with specified number of iterations: 1/2/5/10 ? More iterations for the last one ?
