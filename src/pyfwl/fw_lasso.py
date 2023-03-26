@@ -68,7 +68,6 @@ class _GenericFWLasso(pycs.Solver):
     def m_init(self, **kwargs):
         xp = pycu.get_array_module(self.data)
         mst = self._mstate  # shorthand
-        # mst["x"] = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
         mst["dcv"] = np.inf  # "dual certificate value"
         mst["val"] = xp.array([], dtype=pycrt.getPrecision().value)
         mst["pos"] = xp.array([], dtype="int32")
@@ -94,8 +93,6 @@ class _GenericFWLasso(pycs.Solver):
         return data.get("x")
 
     def objective_func(self) -> pyct.NDArray:
-        # return self._data_fidelity(self._mstate["x"]) + self._penalty(self._mstate["x"])
-        # return self._data_fidelity(self._dense_iterate) + self._penalty(self._dense_iterate)
         return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ *\
             pycop.L1Norm().apply(self._mstate["val"])
     @property
@@ -236,9 +233,7 @@ class VFWLasso(_GenericFWLasso):
 
     def m_step(self):
         mst = self._mstate  # shorthand
-        # xp = pycu.get_array_module(mst["x"])
         xp = pycu.get_array_module(mst["val"])
-        # mgrad = -self._data_fidelity.grad(mst["x"])
         mgrad = self.forwardOp.adjoint(self.data - self.rs_forwardOp(mst["pos"]).apply(mst["val"]))
         if self._astate["positivity_c"]:
             new_ind = xp.argmax(mgrad, axis=-1)
@@ -251,7 +246,6 @@ class VFWLasso(_GenericFWLasso):
             gamma = 2 / (2 + self._astate["idx"])
         elif self.step_size_strategy == "optimal":
             # The optimal value of gamma has a closed form expression, which depends on the dual certificate value.
-            # gamma = -xp.dot(mgrad, mst["x"]).real
             gamma = -xp.dot(mgrad[mst["pos"]], mst["val"]).real
             if abs(dcv) > 1.0:
                 gamma += self.lambda_ * (mst["lift_variable"] + (abs(dcv) - 1.0) * self._bound)
@@ -272,7 +266,6 @@ class VFWLasso(_GenericFWLasso):
         mst["val"] *= 1 - gamma
         mst["lift_variable"] *= 1 - gamma
         if abs(dcv) > 1.0:
-            # mst["x"][new_ind] += pycrt.coerce(gamma * np.sign(dcv) * self._bound)
             if new_ind in mst["pos"]:
                 mst["val"][np.asarray(mst["pos"] == new_ind).nonzero()[0]] += pycrt.coerce(gamma * np.sign(dcv) * self._bound)
             else:
@@ -404,9 +397,6 @@ class PFWLasso(_GenericFWLasso):
         xp = pycu.get_array_module(self._mstate["val"])
         mst = self._mstate
         mst["pos"] = xp.array([], dtype="int32")
-        # QfR: mst["positions"] stores the set of actives indices of the solution. As the solution should be sparse,
-        # in most of the cases this set will remain of relatively small size. Is there any advantage/disadvantage
-        # storing it as a np array instead of a xp array ?
         mst["delta"] = None  # initial buffer for multi spike thresholding
         mst["correction_prec"] = self._init_correction_prec
 
@@ -435,21 +425,13 @@ class PFWLasso(_GenericFWLasso):
 
         xp = pycu.get_array_module(mst["val"])
         if new_indices.size > 0:
-            # if self._astate["idx"] > 1 and self._remove_positions:
-            #     mst["positions"] = xp.unique(xp.hstack([mst["x"].nonzero()[0], new_indices]))
-            # else:
-            #     mst["positions"] = xp.unique(xp.hstack([mst["positions"], new_indices]))
             add_indices = new_indices[xp.invert(xp.isin(new_indices, mst["pos"]))]
-            print("actual new indices: {}".format(add_indices.size))
+            # print("actual new indices: {}".format(add_indices.size))  # i.e. indices that are not already in the support
             mst["pos"] = xp.hstack([mst["pos"], add_indices])
             mst["val"] = xp.hstack([mst["val"], xp.zeros_like(add_indices)])
 
-        # elif self._remove_positions:
-        #     mst["positions"] = (mst["x"] > 1e-5).nonzero()[0]
         # else would correspond to empty new_indices, in this case the set of active indices does not change
         mst["N_indices"].append(mst["pos"].size)
-
-        # print(mst["positions"][:30])
 
         mst["correction_prec"] = max(self._init_correction_prec / self._astate["idx"], self._final_correction_prec)
         if mst["pos"].size > 1:
@@ -460,21 +442,19 @@ class PFWLasso(_GenericFWLasso):
             column = self.forwardOp(tmp)
             corr = xp.dot(self.data, column).real
             if abs(corr) <= self.lambda_:
-                # mst["x"] = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
                 mst["val"] = xp.zeros(1, dtype=pycrt.getPrecision().value)
             elif corr > self.lambda_:
-                # mst["x"] = ((corr - self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]) * tmp
-                mst["val"] = ((corr - self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0])
+                mst["val"] = np.r_[(corr - self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
             else:
-                mst["val"] = ((corr + self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0])
-                # mst["x"] = ((corr + self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]) * tmp
+                mst["val"] = np.r_[(corr + self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
         else:
-            # mst["x"] = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
             mst["val"] = xp.array([], dtype=pycrt.getPrecision().value)
 
         if self._remove_positions:
             to_keep = (abs(mst["val"]) > 1e-5).nonzero()[0]
-            print("Kept : {}/{}".format(to_keep.size, mst["val"].size))
+            ast = self._astate
+            if ast["stdout"] and ast["idx"] % ast["log_rate"] == 0:
+                print("\tAtoms kept: {}/{}".format(to_keep.size, mst["val"].size))
             mst["pos"] = mst["pos"][to_keep]
             mst["val"] = mst["val"][to_keep]
 
@@ -507,13 +487,6 @@ class PFWLasso(_GenericFWLasso):
             )
             return stop_crit
 
-
-        # print(injection.shape)
-        # rs_data_fid = self._data_fidelity * injection
-        # rs_data_fid.diff_lipschitz()
-
-        # subsample = pycop.SubSample(self.forwardOp.shape[1], support_indices)
-        # x0 = subsample(self._mstate["x"])
         rs_data_fid = self.rs_data_fid(support_indices)
 
         x0 = self._mstate["val"]
@@ -534,7 +507,7 @@ class PFWLasso(_GenericFWLasso):
         self._mstate["correction_iterations"].append(apgd.stats()[1]["iteration"][-1])
         self._mstate["correction_durations"].append(apgd.stats()[1]["duration"][-1])
         sol, _ = apgd.stats()
-        return sol["x"]  # subsample.adjoint(sol["x"])
+        return sol["x"]
 
     def post_process(self):
         """
