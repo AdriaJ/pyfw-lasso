@@ -123,20 +123,7 @@ if __name__ == "__main__":
     time_pgd = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_pgd))
 
-    plt.figure()
-    plt.subplot(121)
-    plt.plot(pfw._mstate["N_indices"], label="Support size")
-    plt.plot(pfw._mstate["N_candidates"], label="candidates")
-    plt.legend()
-    plt.subplot(122)
-    plt.plot(pfw._mstate["correction_iterations"], label="iterations")
-    plt.ylim(bottom=0.0)
-    plt.twinx()
-    plt.plot(pfw._mstate["correction_durations"], label="duration", c="r")
-    plt.ylim(bottom=0.0)
-    plt.title("Correction iterations")
-    plt.legend()
-    plt.show()
+    pfw.diagnostics()
 
     apgd_dcv = np.abs(op.adjoint(measurements - op(data_apgd["x"]))).max()/lambda_
     print("Final value of dual certificate:\n\tVFW: {:.4f}\n\tPFW: {:.4f}\n\tAPGD: {:.4f}".format(data_v["dcv"],

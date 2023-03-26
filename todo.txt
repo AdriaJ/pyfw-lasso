@@ -15,5 +15,4 @@ Code
         - use array of values and positions + adapt the forward operator so that it can be efficiently implemented for
         sparse inputs (chosen option)
     -> Needs to be tested in Notebook + finish example file
-* Integrate a diagnostics function for Polyatomic FW
 * [Git] Create a branch to save the dense iterates implementation of PFW and replace main with the sparse iterates one
