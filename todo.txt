@@ -1,19 +1,8 @@
 --------
 Refactor
 --------
-* Verify the example file for VFW and PFW
-* Verify the example file for the positivity constraint
-
 
 ----
 Code
 ----
-* Use a sparse implementation for the intermediate iterates.
-    Different ways to do that:
-        - use sparse.COO format (compatible with pycsou.LinOp ?)
-        - use array of values and positions + a constructor that creates a non-dense array
-        - use array of values and positions + adapt the forward operator so that it can be efficiently implemented for
-        sparse inputs (chosen option)
-    -> Needs to be tested in Notebook + finish example file
-* Integrate a diagnostics function for Polyatomic FW
-* [Git] Create a branch to save the dense iterates implementation of PFW and replace main with the sparse iterates one
+
