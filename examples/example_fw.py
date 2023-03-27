@@ -26,7 +26,7 @@ psnr = 20
 lambda_factor = 0.1
 
 # Parameters of the solver
-remove = False
+remove = True
 eps = 1e-4
 min_iterations = 10
 tmax = 15.0
