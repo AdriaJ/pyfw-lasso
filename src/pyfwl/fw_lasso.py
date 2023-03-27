@@ -119,6 +119,7 @@ class _GenericFWLasso(pycs.Solver):
             self._data_fidelity.diff_lipschitz(tol=1e-3)
             print("Computation of diff_lipschitz takes {:.4f}".format(time.time() - lipschitz_time))
         else:
+            print("diff_lipschitz constant provided.")
             self._data_fidelity._diff_lipschitz = l_constant
         super().fit(track_objective=track_objective, **kwargs)
         self._mstate["x"] = self._dense_iterate
@@ -508,6 +509,70 @@ class PFWLasso(_GenericFWLasso):
         self._mstate["correction_durations"].append(apgd.stats()[1]["duration"][-1])
         sol, _ = apgd.stats()
         return sol["x"]
+
+    def diagnostics(self, log: bool=False):
+        import matplotlib.pyplot as plt
+
+        hist = self.stats()[1]
+
+        fig = plt.figure(figsize=(15, 8))
+        fig.suptitle("Performance analysis of PolyCLEAN")
+        ax = fig.add_subplot(243)
+        ax.plot(self._mstate["N_indices"], label="Support size", marker="x", alpha=.5)
+        ax.plot(self._mstate["N_candidates"], label="Candidates", marker="x", alpha=.5)
+        ax.set_xlabel("Iter.")
+        ax.set_title("Support")
+        ax.legend()
+        ax = fig.add_subplot(244)
+        ax.plot(self._mstate["correction_iterations"], label="iterations", marker=".", c='#2ca02c', alpha=.5)
+        ax.set_ylim(bottom=0.)
+        ax.set_xlabel("Iter.")
+        # ax.legend()
+        ax2 = ax.twinx()
+        ax2.plot(self._mstate["correction_durations"], label="duration", marker="x", c='#d62728', alpha=.5)
+        ax2.set_ylim(bottom=0.)
+        ax2.set_ylabel("Duration (s)")
+        ax.set_title("Correction iterations")
+        lines, labels = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2)
+
+        ax = fig.add_subplot(247)
+        ax.plot(hist['duration'][1:], self._mstate["N_indices"], label="Support size", marker="x", alpha=.5,)
+        ax.plot(hist['duration'][1:], self._mstate["N_candidates"], label="candidates", marker="x", alpha=.5,)
+        ax.set_xlim(left=0.)
+        ax.set_xlabel("Time (s)")
+        ax.legend()
+        ax = fig.add_subplot(248)
+        ax.plot(hist['duration'][1:], self._mstate["correction_iterations"], label="iterations", marker=".",
+                 c='#2ca02c', alpha=.5)
+        ax.set_ylim(bottom=0.)
+        ax.set_xlim(left=0.)
+        ax.set_xlabel("Time (s)")
+        # plt.legend()
+        ax2 = ax.twinx()
+        ax2.plot(hist['duration'][1:], self._mstate["correction_durations"], label="duration", marker="x",
+                 c='#d62728', alpha=.5)
+        ax2.set_ylim(bottom=0.)
+        ax2.set_ylabel("Duration (s)")
+        ax2.set_xlim(left=0.)
+        # plt.legend()
+        lines, labels = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2)
+
+        plt.subplot(121)
+        if log:
+            plt.yscale('log')
+        plt.scatter(hist['duration'], (hist['Memorize[objective_func]'] - hist['Memorize[objective_func]'][-1]) / (
+                hist['Memorize[objective_func]'][0] - hist['Memorize[objective_func]'][-1]), label="PolyCLEAN",
+                    s=20,
+                    marker="+")
+        plt.title('LASSO objective function')
+        plt.legend()
+        plt.xlim(left=0.)
+        plt.xlabel("Time")
+        plt.show()
 
     def post_process(self):
         """
