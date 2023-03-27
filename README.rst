@@ -4,7 +4,7 @@ pyfw-lasso
 
 This python package provides two Frank-Wolfe algorithms to solve the LASSO problem
    
-.. image:: https://github.com/AdriaJ/pyfw-lasso/blob/main/doc/img/lasso.png
+.. image:: /doc/img/lasso.png
   :width: 25 %
   :align: center
 
