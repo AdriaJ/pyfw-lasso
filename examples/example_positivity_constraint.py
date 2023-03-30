@@ -22,9 +22,9 @@ matplotlib.use("Qt5Agg")
 seed = None  # for reproducibility
 
 # Dimensions of the problem
-L = 30
-N = 100
-k = 10
+L = 500
+N = 10000
+k = 100
 psnr = 20
 
 # Parameters for reconstruction

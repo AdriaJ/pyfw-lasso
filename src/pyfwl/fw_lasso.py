@@ -125,9 +125,8 @@ class _GenericFWLasso(pycs.Solver):
         self._mstate["x"] = self._dense_iterate
 
     def rs_data_fid(self, support_indices: pyct.NDArray) -> pyco.DiffFunc:
-        injection = pycop.SubSample(self.forwardOp.shape[1], support_indices).T
         return 0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(
-            -self.data) * self.forwardOp * injection
+            -self.data) * self.rs_forwardOp(support_indices=support_indices)
 
     def rs_forwardOp(self, support_indices: pyct.NDArray) -> pyco.LinOp:
         """
@@ -409,8 +408,8 @@ class PFWLasso(_GenericFWLasso):
             maxi = mst["dcv"]
         else:
             mst["dcv"] = max(mgrad.max(), mgrad.min(), key=abs)  # float
-            # mst["dcv"] is stored as a float in this case and does not handle stacked multidimensional inputs.
             maxi = abs(mst["dcv"])
+        # mst["dcv"] is stored as a float in this case and does not handle stacked multidimensional inputs.
         if self._astate["idx"] == 1:
             mst["delta"] = maxi * (1.0 - self._ms_threshold)
             mst["N_indices"] = []
