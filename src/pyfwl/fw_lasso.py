@@ -389,6 +389,7 @@ class PFWLasso(_GenericFWLasso):
 
     def fit(self, **kwargs):
         self._astate["lock"] = kwargs.pop("lock_reweighting", False)
+        self._prec_rule = kwargs.pop("precision_rule", lambda k: 1/k)
         super().fit(**kwargs)
 
 
@@ -433,7 +434,8 @@ class PFWLasso(_GenericFWLasso):
         # else would correspond to empty new_indices, in this case the set of active indices does not change
         mst["N_indices"].append(mst["pos"].size)
 
-        mst["correction_prec"] = max(self._init_correction_prec / self._astate["idx"], self._final_correction_prec)
+        mst["correction_prec"] = max(self._init_correction_prec * self._prec_rule(self._astate["idx"]),
+                                     self._final_correction_prec)
         if mst["pos"].size > 1:
             mst["val"] = self.rs_correction(mst["pos"], self._mstate["correction_prec"])
         elif mst["pos"].size == 1:  # case 1-sparse solution => the solution can be computed explicitly
@@ -564,7 +566,7 @@ class PFWLasso(_GenericFWLasso):
         if log:
             plt.yscale('log')
         plt.scatter(hist['duration'], (hist['Memorize[objective_func]'] - hist['Memorize[objective_func]'][-1]) / (
-                hist['Memorize[objective_func]'][0] - hist['Memorize[objective_func]'][-1]), label="PolyCLEAN",
+                hist['Memorize[objective_func]'][0] - hist['Memorize[objective_func]'][-1]), label="PFW",
                     s=20,
                     marker="+")
         plt.title('LASSO objective function')
