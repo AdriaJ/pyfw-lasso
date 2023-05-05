@@ -329,6 +329,7 @@ class PFWLasso(_GenericFWLasso):
         final_correction_prec: float = 1e-4,
         remove_positions: bool = False,
         min_correction_steps: int = 5,
+        max_correction_steps: int = 100,
         *,
         folder=None,  # : typ.Optional[pyct.PathLike] = None,
         exist_ok: bool = False,
@@ -374,6 +375,7 @@ class PFWLasso(_GenericFWLasso):
         self._final_correction_prec = final_correction_prec
         self._remove_positions = remove_positions
         self._min_correction_steps = min_correction_steps
+        self._max_correction_steps = max_correction_steps
         super().__init__(
             data=data,
             forwardOp=forwardOp,
@@ -498,9 +500,11 @@ class PFWLasso(_GenericFWLasso):
             penalty = pycop.L1Norm()
         apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
         # The penalty is agnostic to the dimension in this implementation (L1Norm()).
-        stop = pycos.MaxIter(n=self._min_correction_steps)
+        stop = pycos.MaxIter(n=self._min_correction_steps)  # min number of reweighting steps
         if not self._astate["lock"]:
             stop &= correction_stop_crit(precision)
+            stop |= pycos.MaxIter(n=self._max_correction_steps)  # max number of reweighting steps
+
         apgd.fit(
             x0=x0,
             tau=1 / self._data_fidelity._diff_lipschitz,
