@@ -1,10 +1,8 @@
 import datetime as dt
 import time
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import pyxu.abc
 
 import pyxu.abc as pxabc
 import pyxu.operator as pxop
