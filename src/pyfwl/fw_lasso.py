@@ -94,7 +94,7 @@ class _GenericFWLasso(pxs.Solver):
 
     def objective_func(self) -> pxt.NDArray:
         return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ *\
-            pxop.L1Norm().apply(self._mstate["val"])
+            pxop.L1Norm(self._mstate["val"].shape[0]).apply(self._mstate["val"])
     @property
     def _dense_iterate(self):
         mst = self._mstate
@@ -494,12 +494,12 @@ class PFWLasso(_GenericFWLasso):
         rs_data_fid = self.rs_data_fid(support_indices)
 
         x0 = self._mstate["val"]
+        dim = x0.shape[0]
         if self._astate["positivity_c"]:
-            penalty = ut.L1NormPositivityConstraint(shape=(1, None))
+            penalty = ut.L1NormPositivityConstraint(shape=(1, dim))
         else:
-            penalty = pxop.L1Norm()
+            penalty = pxop.L1Norm(dim)
         apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
-        # The penalty is agnostic to the dimension in this implementation (L1Norm()).
         stop = pxos.MaxIter(n=self._min_correction_steps)  # min number of reweighting steps
         if not self._astate["lock"]:
             stop &= correction_stop_crit(precision)

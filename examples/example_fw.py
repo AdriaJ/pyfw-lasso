@@ -4,6 +4,7 @@ import time
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pyxu.abc
 
 import pyxu.abc as pxabc
 import pyxu.operator as pxop
@@ -11,8 +12,8 @@ import pyfwl
 import pyxu.opt.stop as pxos
 from pyxu.opt.solver.pgd import PGD
 
-# matplotlib.use('TkAgg')
 # matplotlib.use("Qt5Agg")
+# matplotlib.use('TkAgg')
 
 seed = None  # for reproducibility
 
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     source = injection(rng.normal(size=k))  # sparse source
 
     op = pxabc.LinOp.from_array(mat)
-    lip = op.lipschitz()
+    op.lipschitz = op.estimate_lipschitz(method='svd', tol=1.e-2)
     noiseless_measurements = op(source)
     std = np.max(np.abs(noiseless_measurements)) * 10 ** (-psnr / 20)
     noise = rng.normal(0, std, size=L)
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     print("\nVanilla FW: Solving ...")
     start = time.time()
     vfw.fit(stop_crit=(min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
-            diff_lipschitz=lip**2)
+            diff_lipschitz=op.lipschitz**2)
     data_v, hist_v = vfw.stats()
     time_v = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_v))
@@ -101,14 +102,14 @@ if __name__ == "__main__":
     print("Polyatomic FW: Solving ...")
     start = time.time()
     pfw.fit(stop_crit=(min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
-            diff_lipschitz=lip**2)
+            diff_lipschitz=op.lipschitz**2)
     data_p, hist_p = pfw.stats()
     time_p = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_p))
 
     # Explicit definition of the objective function for APGD
     data_fid = 0.5 * pxop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
-    regul = lambda_ * pxop.L1Norm()
+    regul = lambda_ * pxop.L1Norm(N)
 
     print("Solving with APGD: ...")
     pgd = PGD(data_fid, regul, show_progress=False)
@@ -117,7 +118,7 @@ if __name__ == "__main__":
         x0=np.zeros(N, dtype="float64"),
         stop_crit=(min_iter & pgd.default_stop_crit()) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
-        tau=1/lip**2,
+        tau=1/op.lipschitz**2,
     )
     data_apgd, hist_apgd = pgd.stats()
     time_pgd = time.time() - start
@@ -137,11 +138,11 @@ if __name__ == "__main__":
 
     # Solving the same problems with another stopping criterion: DCV
     vfw.fit(stop_crit=(min_iter & dcv) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)),
-            diff_lipschitz=lip**2)
+            diff_lipschitz=op.lipschitz**2)
     data_v_dcv, hist_v_dcv = vfw.stats()
 
     pfw.fit(stop_crit=(min_iter & dcv) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)),
-            diff_lipschitz=lip**2)
+            diff_lipschitz=op.lipschitz**2)
     data_p_dcv, hist_p_dcv = pfw.stats()
 
     def indices(arr):
