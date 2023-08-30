@@ -10,10 +10,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-import pycsou.abc as pyca
-import pycsou.operator as pycop
-import pycsou.opt.stop as pycos
-from pycsou.opt.solver.pgd import PGD
+import pyxu.abc as pxa
+import pyxu.operator as pxop
+import pyxu.opt.stop as pxos
+from pyxu.opt.solver.pgd import PGD
 
 import pyfwl
 
@@ -34,7 +34,7 @@ eps = 1e-5
 min_iterations = 100
 tmax = 5.0
 
-stop_crit = pycos.RelError(
+stop_crit = pxos.RelError(
     eps=eps,
     var="objective_func",
     f=None,
@@ -43,9 +43,9 @@ stop_crit = pycos.RelError(
 )
 
 # Minimum number of iterations
-min_iter = pycos.MaxIter(n=min_iterations)
+min_iter = pxos.MaxIter(n=min_iterations)
 
-full_stop = (min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax))
+full_stop = (min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax))
 
 if __name__ == "__main__":
     if seed is None:
@@ -56,10 +56,10 @@ if __name__ == "__main__":
 
     mat = rng.normal(size=(L, N))  # forward matrix
     indices = rng.choice(N, size=k)  # indices of active components in the source
-    injection = pycop.SubSample(N, indices).T
+    injection = pxop.SubSample(N, indices).T
     source = np.abs(injection((rng.normal(size=k))))  # sparse source
 
-    op = pyca.LinOp.from_array(mat)
+    op = pxa.LinOp.from_array(mat)
     start = time.time()
     lip = op.lipschitz()
     print("Computation of the Lipschitz constant in {:.2f}".format(time.time()-start))
@@ -92,15 +92,15 @@ if __name__ == "__main__":
     print("\tSolved in {:.3f} seconds".format(time_p))
 
     # Explicit definition of the objective function for APGD
-    data_fid = 0.5 * pycop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
-    regul = lambda_ * pycop.L1Norm()
+    data_fid = 0.5 * pxop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
+    regul = lambda_ * pxop.L1Norm()
 
     print("Solving with APGD: ...")
     pgd = PGD(data_fid, regul, show_progress=False)
     start = time.time()
     pgd.fit(
         x0=np.zeros(N, dtype="float64"),
-        stop_crit=(min_iter & pgd.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
+        stop_crit=(min_iter & pgd.default_stop_crit()) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
         tau=1/lip**2
     )
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     pgd_pos = PGD(data_fid, posRegul, show_progress=False)
     pgd_pos.fit(
         x0=np.zeros(N, dtype="float64"),
-        stop_crit=(min_iter & pgd_pos.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
+        stop_crit=(min_iter & pgd_pos.default_stop_crit()) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
         tau=1/lip**2,
     )

@@ -2,30 +2,28 @@
 This file implements a few common operators, useful in the development of PFW for the LASSO problem.
 """
 
-import typing as typ
-
 import numpy as np
 
-import pycsou.abc.operator as pyco
-import pycsou.runtime as pycrt
-import pycsou.util as pycu
-import pycsou.util.ptype as pyct
+import pyxu.abc.operator as pxo
+import pyxu.runtime as pxrt
+import pyxu.util as pxu
+import pyxu.info.ptype as pxt
 
 __all__ = [
     "L1NormPositivityConstraint",
 ]
 
-# class NonNegativeOrthant(pyco.ProxFunc):
+# class NonNegativeOrthant(pxo.ProxFunc):
 #     """
 #     Indicator function of the non-negative orthant (positivity constraint).
 #     """
 #
-#     def __init__(self, shape: pyct.OpShape):
+#     def __init__(self, shape: pxt.OpShape):
 #         super().__init__(shape=shape)
 #
-#     @pycrt.enforce_precision(i="arr")
-#     def apply(self, arr: pyct.NDArray) -> pyct.NDArray:
-#         xp = pycu.get_array_module(arr)
+#     @pxrt.enforce_precision(i="arr")
+#     def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
+#         xp = pxu.get_array_module(arr)
 #         if arr.ndim <= 1:
 #             res = 0 if xp.all(arr >= 0) else xp.inf
 #             return xp.r_[res].astype(arr.dtype)
@@ -34,24 +32,24 @@ __all__ = [
 #             res[xp.any(arr < 0, axis=-1)] = xp.infty
 #             return res.astype(arr.dtype)
 #
-#     @pycrt.enforce_precision(i="arr")
-#     def prox(self, arr: pyct.NDArray, tau: pyct.Real) -> pyct.NDArray:
-#         xp = pycu.get_array_module(arr)
+#     @pxrt.enforce_precision(i="arr")
+#     def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
+#         xp = pxu.get_array_module(arr)
 #         res = xp.copy(arr)
 #         res[res < 0] = 0
 #         return res
 #
-#     def asloss(self, data: pyct.NDArray = None) -> pyct.OpT:
+#     def asloss(self, data: pxt.NDArray = None) -> pxt.OpT:
 #         pass
 
 
-class L1NormPositivityConstraint(pyco.ProxFunc):
-    def __init__(self, shape: pyct.OpShape):
+class L1NormPositivityConstraint(pxo.ProxFunc):
+    def __init__(self, shape: pxt.OpShape):
         super().__init__(shape=shape)
 
-    @pycrt.enforce_precision(i="arr")
-    def apply(self, arr: pyct.NDArray) -> pyct.NDArray:
-        xp = pycu.get_array_module(arr)
+    @pxrt.enforce_precision(i="arr")
+    def apply(self, arr: pxt.NDArray) -> pxt.NDArray:
+        xp = pxu.get_array_module(arr)
         if arr.ndim <= 1:
             res = arr.sum() if xp.all(arr >= 0) else xp.inf
             return xp.r_[res].astype(arr.dtype)
@@ -61,9 +59,9 @@ class L1NormPositivityConstraint(pyco.ProxFunc):
             res[indices] = arr[indices].sum(axis=-1)
             return res.astype(arr.dtype)
 
-    @pycrt.enforce_precision(i=["arr", "tau"])
-    def prox(self, arr: pyct.NDArray, tau: pyct.Real) -> pyct.NDArray:
-        xp = pycu.get_array_module(arr)
+    @pxrt.enforce_precision(i=["arr", "tau"])
+    def prox(self, arr: pxt.NDArray, tau: pxt.Real) -> pxt.NDArray:
+        xp = pxu.get_array_module(arr)
         res = xp.zeros_like(arr)
         indices = arr > 0
         res[indices] = xp.fmax(0, arr[indices] - tau)

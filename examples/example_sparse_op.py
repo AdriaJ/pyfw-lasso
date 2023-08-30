@@ -9,11 +9,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-import pycsou.abc as pyca
-import pycsou.operator as pycop
-import pycsou.opt.stop as pycos
-import pycsou.util.ptype as pyct
-from pycsou.opt.solver.pgd import PGD
+import pyxu.abc as pxa
+import pyxu.operator as pxop
+import pyxu.opt.stop as pxos
+import pyxu.info.ptype as pxt
+from pyxu.opt.solver.pgd import PGD
 
 import pyfwl
 
@@ -41,7 +41,7 @@ init_correction = 1e-1
 final_correction = 1e-6
 eps_dcv = 1e-2
 
-stop_crit = pycos.RelError(
+stop_crit = pxos.RelError(
     eps=eps,
     var="objective_func",
     f=None,
@@ -51,10 +51,10 @@ stop_crit = pycos.RelError(
 # alternative stopping criteria
 dcv = pyfwl.dcvStoppingCrit(eps_dcv)
 # Minimum number of iterations
-min_iter = pycos.MaxIter(n=min_iterations)
+min_iter = pxos.MaxIter(n=min_iterations)
 
 # track DCV
-track_dcv = pycos.AbsError(eps=1e-10, var="dcv", f=None, norm=2, satisfy_all=True)
+track_dcv = pxos.AbsError(eps=1e-10, var="dcv", f=None, norm=2, satisfy_all=True)
 
 """
 We consider a LASSO problem with an explicit matrix as a forward operator. In this case, we can accelerate the solving
@@ -64,21 +64,21 @@ We simply do that by slicing the matrix.
 
 
 class SparseVFW(pyfwl.VFWLasso):
-    def rs_forwardOp(self, support_indices: pyct.NDArray) -> pyca.LinOp:
+    def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxa.LinOp:
         assert self.forwardOp._name == "_ExplicitLinOp"
         if support_indices.size > 0:
-            return pyca.LinOp.from_array(self.forwardOp.mat[:, support_indices])
+            return pxa.LinOp.from_array(self.forwardOp.mat[:, support_indices])
         else:
-            return pycop.NullOp(shape=(1, None))
+            return pxop.NullOp(shape=(1, None))
 
 
 class SparsePFW(pyfwl.PFWLasso):
-    def rs_forwardOp(self, support_indices: pyct.NDArray) -> pyca.LinOp:
+    def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxa.LinOp:
         assert self.forwardOp._name == "_ExplicitLinOp"
         if support_indices.size > 0:
-            return pyca.LinOp.from_array(self.forwardOp.mat[:, support_indices])
+            return pxa.LinOp.from_array(self.forwardOp.mat[:, support_indices])
         else:
-            return pycop.NullOp(shape=(1, None))
+            return pxop.NullOp(shape=(1, None))
 
 
 if __name__ == "__main__":
@@ -90,10 +90,10 @@ if __name__ == "__main__":
 
     mat = rng.normal(size=(L, N))  # forward matrix
     indices = rng.choice(N, size=k)  # indices of active components in the source
-    injection = pycop.SubSample(N, indices).T
+    injection = pxop.SubSample(N, indices).T
     source = injection(rng.normal(size=k))  # sparse source
 
-    op = pyca.LinOp.from_array(mat)
+    op = pxa.LinOp.from_array(mat)
     lip = op.lipschitz()
     noiseless_measurements = op(source)
     std = np.max(np.abs(noiseless_measurements)) * 10 ** (-psnr / 20)
@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     print("\nVanilla FW: Solving ...")
     start = time.time()
-    vfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
+    vfw.fit(stop_crit=(min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
             diff_lipschitz=lip ** 2)
     data_v, hist_v = vfw.stats()
     time_v = time.time() - start
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     print("Polyatomic FW: Solving ...")
     start = time.time()
-    pfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
+    pfw.fit(stop_crit=(min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
             diff_lipschitz=lip ** 2)
     data_p, hist_p = pfw.stats()
     time_p = time.time() - start
@@ -157,7 +157,7 @@ if __name__ == "__main__":
 
     print("Sparse Vanilla FW: Solving ...")
     start = time.time()
-    svfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
+    svfw.fit(stop_crit=(min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
              diff_lipschitz=lip ** 2)
     data_sv, hist_sv = svfw.stats()
     time_sv = time.time() - start
@@ -165,22 +165,22 @@ if __name__ == "__main__":
 
     print("Sparse Polyatomic FW: Solving ...")
     start = time.time()
-    spfw.fit(stop_crit=(min_iter & stop_crit) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
+    spfw.fit(stop_crit=(min_iter & stop_crit) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)) | track_dcv,
              diff_lipschitz=lip ** 2)
     data_sp, hist_sp = spfw.stats()
     time_sp = time.time() - start
     print("\tSolved in {:.3f} seconds".format(time_sp))
 
     # Explicit definition of the objective function for APGD
-    data_fid = 0.5 * pycop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
-    regul = lambda_ * pycop.L1Norm()
+    data_fid = 0.5 * pxop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
+    regul = lambda_ * pxop.L1Norm()
 
     print("Solving with APGD: ...")
     pgd = PGD(data_fid, regul, show_progress=False)
     start = time.time()
     pgd.fit(
         x0=np.zeros(N, dtype="float64"),
-        stop_crit=(min_iter & pgd.default_stop_crit()) | pycos.MaxDuration(t=dt.timedelta(seconds=tmax)),
+        stop_crit=(min_iter & pgd.default_stop_crit()) | pxos.MaxDuration(t=dt.timedelta(seconds=tmax)),
         track_objective=True,
         tau=1 / lip ** 2,
     )

@@ -5,14 +5,14 @@ import typing as typ
 import numpy as np
 
 import pyfwl.utils as ut
-import pycsou.abc.operator as pyco
-import pycsou.abc.solver as pycs
-import pycsou.operator as pycop
-import pycsou.opt.stop as pycos
-import pycsou.runtime as pycrt
-import pycsou.util as pycu
-import pycsou.util.ptype as pyct
-from pycsou.opt.solver.pgd import PGD
+import pyxu.abc.operator as pxo
+import pyxu.abc.solver as pxs
+import pyxu.operator as pxop
+import pyxu.opt.stop as pxos
+import pyxu.runtime as pxrt
+import pyxu.util as pxu
+import pyxu.info.ptype as pxt
+from pyxu.opt.solver.pgd import PGD
 
 __all__ = [
     "VFWLasso",
@@ -20,7 +20,7 @@ __all__ = [
     "dcvStoppingCrit",
 ]
 
-class _GenericFWLasso(pycs.Solver):
+class _GenericFWLasso(pxs.Solver):
     r"""
     Base class for Frank-Wolfe algorithms (FW) for the LASSO problem.
 
@@ -29,8 +29,8 @@ class _GenericFWLasso(pycs.Solver):
 
     def __init__(
         self,
-        data: pyct.NDArray,
-        forwardOp: pyco.LinOp,
+        data: pxt.NDArray,
+        forwardOp: pxo.LinOp,
         lambda_: float,
         *,
         folder=None,  # typ.Optional[pyct.PathLike] = None,
@@ -39,7 +39,7 @@ class _GenericFWLasso(pycs.Solver):
         writeback_rate: typ.Optional[int] = None,
         verbosity: int = 1,
         show_progress: bool = True,
-        log_var: pyct.VarName = (
+        log_var: pxt.VarName = (
             "x",
             "pos",
             "val",
@@ -55,25 +55,25 @@ class _GenericFWLasso(pycs.Solver):
             show_progress=show_progress,
             log_var=log_var,
         )
-        self.lambda_ = pycrt.coerce(lambda_)
+        self.lambda_ = pxrt.coerce(lambda_)
         self.forwardOp = forwardOp
-        self.data = pycrt.coerce(data)
+        self.data = pxrt.coerce(data)
 
         self._data_fidelity = (
-            0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp
+                0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(-self.data) * self.forwardOp
         )
-        self._penalty = self.lambda_ * pycop.L1Norm(dim=self.forwardOp.shape[1])
-        self._bound = 0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(data)[0] / self.lambda_
+        self._penalty = self.lambda_ * pxop.L1Norm(dim=self.forwardOp.shape[1])
+        self._bound = 0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(data)[0] / self.lambda_
 
     def m_init(self, **kwargs):
-        xp = pycu.get_array_module(self.data)
+        xp = pxu.get_array_module(self.data)
         mst = self._mstate  # shorthand
         mst["dcv"] = np.inf  # "dual certificate value"
-        mst["val"] = xp.array([], dtype=pycrt.getPrecision().value)
+        mst["val"] = xp.array([], dtype=pxrt.getPrecision().value)
         mst["pos"] = xp.array([], dtype="int32")
 
-    def default_stop_crit(self) -> pycs.StoppingCriterion:
-        stop_crit = pycos.RelError(
+    def default_stop_crit(self) -> pxs.StoppingCriterion:
+        stop_crit = pxos.RelError(
             eps=1e-4,
             var="objective_func",
             f=None,
@@ -82,7 +82,7 @@ class _GenericFWLasso(pycs.Solver):
         )
         return stop_crit
 
-    def solution(self) -> pyct.NDArray:
+    def solution(self) -> pxt.NDArray:
         """
         Returns
         -------
@@ -92,15 +92,15 @@ class _GenericFWLasso(pycs.Solver):
         data, _ = self.stats()
         return data.get("x")
 
-    def objective_func(self) -> pyct.NDArray:
+    def objective_func(self) -> pxt.NDArray:
         return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ *\
-            pycop.L1Norm().apply(self._mstate["val"])
+            pxop.L1Norm().apply(self._mstate["val"])
     @property
     def _dense_iterate(self):
         mst = self._mstate
         assert mst["val"].shape == mst["pos"].shape
-        xp = pycu.get_array_module(mst["val"])
-        res = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
+        xp = pxu.get_array_module(mst["val"])
+        res = xp.zeros(self.forwardOp.shape[1], dtype=pxrt.getPrecision().value)
         res[mst["pos"]] = mst["val"]
         return res
 
@@ -124,18 +124,18 @@ class _GenericFWLasso(pycs.Solver):
         super().fit(track_objective=track_objective, **kwargs)
         self._mstate["x"] = self._dense_iterate
 
-    def rs_data_fid(self, support_indices: pyct.NDArray) -> pyco.DiffFunc:
-        return 0.5 * pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(
+    def rs_data_fid(self, support_indices: pxt.NDArray) -> pxo.DiffFunc:
+        return 0.5 * pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).argshift(
             -self.data) * self.rs_forwardOp(support_indices=support_indices)
 
-    def rs_forwardOp(self, support_indices: pyct.NDArray) -> pyco.LinOp:
+    def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxo.LinOp:
         """
         Used in order to apply the forward operator to a sparse input.
 
         Needs to be over-written in case of a more efficient implementation of the reduced support forward operator
         implementation (only in the forward pass).
         """
-        injection = pycop.SubSample(self.forwardOp.shape[1], support_indices).T
+        injection = pxop.SubSample(self.forwardOp.shape[1], support_indices).T
         return self.forwardOp * injection
 
 class VFWLasso(_GenericFWLasso):
@@ -172,8 +172,8 @@ class VFWLasso(_GenericFWLasso):
 
     def __init__(
         self,
-        data: pyct.NDArray,
-        forwardOp: pyco.LinOp,
+        data: pxt.NDArray,
+        forwardOp: pxo.LinOp,
         lambda_: float,
         step_size: str = "optimal",
         *,
@@ -183,7 +183,7 @@ class VFWLasso(_GenericFWLasso):
         writeback_rate: typ.Optional[int] = None,
         verbosity: int = 50,
         show_progress: bool = True,
-        log_var: pyct.VarName = (
+        log_var: pxt.VarName = (
             "x",
             "pos",
             "val",
@@ -233,7 +233,7 @@ class VFWLasso(_GenericFWLasso):
 
     def m_step(self):
         mst = self._mstate  # shorthand
-        xp = pycu.get_array_module(mst["val"])
+        xp = pxu.get_array_module(mst["val"])
         mgrad = self.forwardOp.adjoint(self.data - self.rs_forwardOp(mst["pos"]).apply(mst["val"]))
         if self._astate["positivity_c"]:
             new_ind = xp.argmax(mgrad, axis=-1)
@@ -249,14 +249,14 @@ class VFWLasso(_GenericFWLasso):
             gamma = -xp.dot(mgrad[mst["pos"]], mst["val"]).real
             if abs(dcv) > 1.0:
                 gamma += self.lambda_ * (mst["lift_variable"] + (abs(dcv) - 1.0) * self._bound)
-                injection = pycop.SubSample(self.forwardOp.shape[1], xp.array(new_ind)).T
-                gamma /= pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(
+                injection = pxop.SubSample(self.forwardOp.shape[1], xp.array(new_ind)).T
+                gamma /= pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(
                     self._bound * np.sign(dcv) * self.forwardOp(injection(xp.array(1.0))) -
                     self.rs_forwardOp(mst["pos"]).apply(mst["val"])
                 )[0]  # we can use numpy (np) as dcv is a float
             else:
                 gamma += self.lambda_ * mst["lift_variable"]
-                gamma /= pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(self.rs_forwardOp(mst["pos"]).apply(
+                gamma /= pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(self.rs_forwardOp(mst["pos"]).apply(
                     mst["val"]))[0]
 
         if not 0 < gamma < 1:
@@ -267,10 +267,10 @@ class VFWLasso(_GenericFWLasso):
         mst["lift_variable"] *= 1 - gamma
         if abs(dcv) > 1.0:
             if new_ind in mst["pos"]:
-                mst["val"][np.asarray(mst["pos"] == new_ind).nonzero()[0]] += pycrt.coerce(gamma * np.sign(dcv) * self._bound)
+                mst["val"][np.asarray(mst["pos"] == new_ind).nonzero()[0]] += pxrt.coerce(gamma * np.sign(dcv) * self._bound)
             else:
                 mst["pos"] = np.append(mst["pos"], new_ind)
-                mst["val"] = np.append(mst["val"], pycrt.coerce(gamma * np.sign(dcv) * self._bound))
+                mst["val"] = np.append(mst["val"], pxrt.coerce(gamma * np.sign(dcv) * self._bound))
             mst["lift_variable"] += gamma * self._bound
 
 
@@ -321,8 +321,8 @@ class PFWLasso(_GenericFWLasso):
 
     def __init__(
         self,
-        data: pyct.NDArray,
-        forwardOp: pyco.LinOp,
+        data: pxt.NDArray,
+        forwardOp: pxo.LinOp,
         lambda_: float,
         ms_threshold: float = 0.7,  # multi spikes threshold at init
         init_correction_prec: float = 0.2,
@@ -337,7 +337,7 @@ class PFWLasso(_GenericFWLasso):
         writeback_rate: typ.Optional[int] = None,
         verbosity: int = 10,
         show_progress: bool = True,
-        log_var: pyct.VarName = (
+        log_var: pxt.VarName = (
             "x",
             "pos",
             "val",
@@ -397,7 +397,7 @@ class PFWLasso(_GenericFWLasso):
 
     def m_init(self, **kwargs):
         super(PFWLasso, self).m_init(**kwargs)
-        xp = pycu.get_array_module(self._mstate["val"])
+        xp = pxu.get_array_module(self._mstate["val"])
         mst = self._mstate
         mst["pos"] = xp.array([], dtype="int32")
         mst["delta"] = None  # initial buffer for multi spike thresholding
@@ -426,7 +426,7 @@ class PFWLasso(_GenericFWLasso):
             new_indices = (abs(mgrad) > max(thresh, 1.0)).nonzero()[0]
         mst["N_candidates"].append(new_indices.size)
 
-        xp = pycu.get_array_module(mst["val"])
+        xp = pxu.get_array_module(mst["val"])
         if new_indices.size > 0:
             add_indices = new_indices[xp.invert(xp.isin(new_indices, mst["pos"]))]
             # print("actual new indices: {}".format(add_indices.size))  # i.e. indices that are not already in the support
@@ -441,18 +441,18 @@ class PFWLasso(_GenericFWLasso):
         if mst["pos"].size > 1:
             mst["val"] = self.rs_correction(mst["pos"], self._mstate["correction_prec"])
         elif mst["pos"].size == 1:  # case 1-sparse solution => the solution can be computed explicitly
-            tmp = xp.zeros(self.forwardOp.shape[1], dtype=pycrt.getPrecision().value)
+            tmp = xp.zeros(self.forwardOp.shape[1], dtype=pxrt.getPrecision().value)
             tmp[mst["pos"]] = 1.0
             column = self.forwardOp(tmp)
             corr = xp.dot(self.data, column).real
             if abs(corr) <= self.lambda_:
-                mst["val"] = xp.zeros(1, dtype=pycrt.getPrecision().value)
+                mst["val"] = xp.zeros(1, dtype=pxrt.getPrecision().value)
             elif corr > self.lambda_:
-                mst["val"] = np.r_[(corr - self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
+                mst["val"] = np.r_[(corr - self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
             else:
-                mst["val"] = np.r_[(corr + self.lambda_) / pycop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
+                mst["val"] = np.r_[(corr + self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
         else:
-            mst["val"] = xp.array([], dtype=pycrt.getPrecision().value)
+            mst["val"] = xp.array([], dtype=pxrt.getPrecision().value)
 
         if self._remove_positions:
             to_keep = (abs(mst["val"]) > 1e-5).nonzero()[0]
@@ -462,7 +462,7 @@ class PFWLasso(_GenericFWLasso):
             mst["pos"] = mst["pos"][to_keep]
             mst["val"] = mst["val"][to_keep]
 
-    def rs_correction(self, support_indices: pyct.NDArray, precision: float) -> pyct.NDArray:
+    def rs_correction(self, support_indices: pxt.NDArray, precision: float) -> pxt.NDArray:
         r"""
         Method to update the weights after the selection of the new atoms. It solves a LASSO problem with a
         restricted support corresponding to the current set of active indices (active atoms). As mentioned,
@@ -481,8 +481,8 @@ class PFWLasso(_GenericFWLasso):
             New iterate with the updated weights.
         """
 
-        def correction_stop_crit(eps) -> pycs.StoppingCriterion:
-            stop_crit = pycos.RelError(
+        def correction_stop_crit(eps) -> pxs.StoppingCriterion:
+            stop_crit = pxos.RelError(
                 eps=eps,
                 var="x",
                 f=None,
@@ -497,18 +497,18 @@ class PFWLasso(_GenericFWLasso):
         if self._astate["positivity_c"]:
             penalty = ut.L1NormPositivityConstraint(shape=(1, None))
         else:
-            penalty = pycop.L1Norm()
+            penalty = pxop.L1Norm()
         apgd = PGD(rs_data_fid, self.lambda_ * penalty, show_progress=False)
         # The penalty is agnostic to the dimension in this implementation (L1Norm()).
-        stop = pycos.MaxIter(n=self._min_correction_steps)  # min number of reweighting steps
+        stop = pxos.MaxIter(n=self._min_correction_steps)  # min number of reweighting steps
         if not self._astate["lock"]:
             stop &= correction_stop_crit(precision)
-            stop |= pycos.MaxIter(n=self._max_correction_steps)  # max number of reweighting steps
+            stop |= pxos.MaxIter(n=self._max_correction_steps)  # max number of reweighting steps
 
         apgd.fit(
             x0=x0,
             tau=1 / self._data_fidelity._diff_lipschitz,
-            stop_crit=(stop | pycos.MaxDuration(t=dt.timedelta(seconds=1000)))
+            stop_crit=(stop | pxos.MaxDuration(t=dt.timedelta(seconds=1000)))
         )
         self._mstate["correction_iterations"].append(apgd.stats()[1]["iteration"][-1])
         self._mstate["correction_durations"].append(apgd.stats()[1]["duration"][-1])
@@ -588,7 +588,7 @@ class PFWLasso(_GenericFWLasso):
         mst["val"] = self.rs_correction(mst["pos"], self._final_correction_prec)
 
 
-def dcvStoppingCrit(eps: float = 1e-2) -> pycs.StoppingCriterion:
+def dcvStoppingCrit(eps: float = 1e-2) -> pxs.StoppingCriterion:
     r"""
     Instantiate a ``StoppingCriterion`` class based on the maximum value of the dual certificate, that is automatically
     computed along the iterations of any Frank-Wolfe algorithm. At convergence, the maximum absolute value component of
@@ -609,7 +609,7 @@ def dcvStoppingCrit(eps: float = 1e-2) -> pycs.StoppingCriterion:
     def abs_diff_to_one(x):
         return abs(x) - 1.0
 
-    stop_crit = pycos.AbsError(
+    stop_crit = pxos.AbsError(
         eps=eps,
         var="dcv",
         f=abs_diff_to_one,
