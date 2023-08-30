@@ -18,7 +18,7 @@ from pyxu.opt.solver.pgd import PGD
 import pyfwl
 
 # matplotlib.use('TkAgg')
-matplotlib.use("Qt5Agg")
+# matplotlib.use("Qt5Agg")
 
 seed = None  # for reproducibility
 
@@ -62,23 +62,32 @@ with PFW by providing an efficient implementation of the forward operator when a
 We simply do that by slicing the matrix.
 """
 
-
-class SparseVFW(pyfwl.VFWLasso):
+class MixinSparseForwardOp():
     def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxa.LinOp:
         assert self.forwardOp._name == "_ExplicitLinOp"
         if support_indices.size > 0:
             return pxa.LinOp.from_array(self.forwardOp.mat[:, support_indices])
         else:
-            return pxop.NullOp(shape=(1, None))
+            return pxop.NullOp(shape=(self.forwardOp.shape[0], 0))
 
+class SparseVFW(MixinSparseForwardOp, pyfwl.VFWLasso):
+    pass
 
-class SparsePFW(pyfwl.PFWLasso):
-    def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxa.LinOp:
-        assert self.forwardOp._name == "_ExplicitLinOp"
-        if support_indices.size > 0:
-            return pxa.LinOp.from_array(self.forwardOp.mat[:, support_indices])
-        else:
-            return pxop.NullOp(shape=(1, None))
+    # def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxa.LinOp:
+    #     assert self.forwardOp._name == "_ExplicitLinOp"
+    #     if support_indices.size > 0:
+    #         return pxa.LinOp.from_array(self.forwardOp.mat[:, support_indices])
+    #     else:
+    #         return pxop.NullOp(shape=(self.forwardOp.shape[0], 0))
+
+class SparsePFW(MixinSparseForwardOp, pyfwl.PFWLasso):
+    pass
+    # def rs_forwardOp(self, support_indices: pxt.NDArray) -> pxa.LinOp:
+    #     assert self.forwardOp._name == "_ExplicitLinOp"
+    #     if support_indices.size > 0:
+    #         return pxa.LinOp.from_array(self.forwardOp.mat[:, support_indices])
+    #     else:
+    #         return pxop.NullOp(shape=(self.forwardOp.shape[0], 0))
 
 
 if __name__ == "__main__":
@@ -94,7 +103,8 @@ if __name__ == "__main__":
     source = injection(rng.normal(size=k))  # sparse source
 
     op = pxa.LinOp.from_array(mat)
-    lip = op.lipschitz()
+    lip = op.estimate_lipschitz(method='svd', tol=1.e-2)
+    op.lipschitz = lip
     noiseless_measurements = op(source)
     std = np.max(np.abs(noiseless_measurements)) * 10 ** (-psnr / 20)
     noise = rng.normal(0, std, size=L)
@@ -173,7 +183,7 @@ if __name__ == "__main__":
 
     # Explicit definition of the objective function for APGD
     data_fid = 0.5 * pxop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
-    regul = lambda_ * pxop.L1Norm()
+    regul = lambda_ * pxop.L1Norm(N)
 
     print("Solving with APGD: ...")
     pgd = PGD(data_fid, regul, show_progress=False)

@@ -17,7 +17,7 @@ from pyxu.opt.solver.pgd import PGD
 
 import pyfwl
 
-matplotlib.use("Qt5Agg")
+# matplotlib.use("Qt5Agg")
 
 seed = None  # for reproducibility
 
@@ -61,7 +61,8 @@ if __name__ == "__main__":
 
     op = pxa.LinOp.from_array(mat)
     start = time.time()
-    lip = op.lipschitz()
+    lip = op.estimate_lipschitz(method='svd', tol=1.e-2)
+    op.lipschitz = lip
     print("Computation of the Lipschitz constant in {:.2f}".format(time.time()-start))
     noiseless_measurements = op(source)
     std = np.max(np.abs(noiseless_measurements)) * 10 ** (-psnr / 20)
@@ -93,7 +94,7 @@ if __name__ == "__main__":
 
     # Explicit definition of the objective function for APGD
     data_fid = 0.5 * pxop.SquaredL2Norm(dim=op.shape[0]).argshift(-measurements) * op
-    regul = lambda_ * pxop.L1Norm()
+    regul = lambda_ * pxop.L1Norm(N)
 
     print("Solving with APGD: ...")
     pgd = PGD(data_fid, regul, show_progress=False)
@@ -131,7 +132,7 @@ if __name__ == "__main__":
     print("\tSolved in {:.3f} seconds".format(hist_p_pos["duration"][-1]))
 
     print("Solving with PGD: ...")
-    posRegul = lambda_ * pyfwl.L1NormPositivityConstraint(shape=(1, None))
+    posRegul = lambda_ * pyfwl.L1NormPositivityConstraint(shape=(1, N))
     pgd_pos = PGD(data_fid, posRegul, show_progress=False)
     pgd_pos.fit(
         x0=np.zeros(N, dtype="float64"),
