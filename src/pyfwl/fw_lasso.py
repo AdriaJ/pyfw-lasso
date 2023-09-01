@@ -20,6 +20,7 @@ __all__ = [
     "dcvStoppingCrit",
 ]
 
+
 class _GenericFWLasso(pxs.Solver):
     r"""
     Base class for Frank-Wolfe algorithms (FW) for the LASSO problem.
@@ -28,23 +29,23 @@ class _GenericFWLasso(pxs.Solver):
     """
 
     def __init__(
-        self,
-        data: pxt.NDArray,
-        forwardOp: pxo.LinOp,
-        lambda_: float,
-        *,
-        folder=None,  # typ.Optional[pyct.PathLike] = None,
-        exist_ok: bool = False,
-        stop_rate: int = 1,
-        writeback_rate: typ.Optional[int] = None,
-        verbosity: int = 1,
-        show_progress: bool = True,
-        log_var: pxt.VarName = (
-            "x",
-            "pos",
-            "val",
-            "dcv",
-        ),
+            self,
+            data: pxt.NDArray,
+            forwardOp: pxo.LinOp,
+            lambda_: float,
+            *,
+            folder=None,  # typ.Optional[pyct.PathLike] = None,
+            exist_ok: bool = False,
+            stop_rate: int = 1,
+            writeback_rate: typ.Optional[int] = None,
+            verbosity: int = 1,
+            show_progress: bool = True,
+            log_var: pxt.VarName = (
+                    "x",
+                    "pos",
+                    "val",
+                    "dcv",
+            ),
     ):
         super().__init__(
             folder=folder,
@@ -93,8 +94,9 @@ class _GenericFWLasso(pxs.Solver):
         return data.get("x")
 
     def objective_func(self) -> pxt.NDArray:
-        return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ *\
+        return self.rs_data_fid(self._mstate["pos"]).apply(self._mstate["val"]) + self.lambda_ * \
             pxop.L1Norm(self._mstate["val"].shape[0]).apply(self._mstate["val"])
+
     @property
     def _dense_iterate(self):
         mst = self._mstate
@@ -113,14 +115,6 @@ class _GenericFWLasso(pxs.Solver):
         positivity_c = kwargs.pop("positivity_constraint", False)
         self._astate["positivity_c"] = positivity_c
 
-        l_constant = kwargs.pop("diff_lipschitz", None)
-        if l_constant is None:
-            lipschitz_time = time.time()
-            self._data_fidelity.diff_lipschitz(tol=1e-3)
-            print("Computation of diff_lipschitz takes {:.4f}".format(time.time() - lipschitz_time))
-        else:
-            print("diff_lipschitz constant provided.")
-            self._data_fidelity._diff_lipschitz = l_constant
         super().fit(track_objective=track_objective, **kwargs)
         self._mstate["x"] = self._dense_iterate
 
@@ -137,6 +131,7 @@ class _GenericFWLasso(pxs.Solver):
         """
         injection = pxop.SubSample(self.forwardOp.shape[1], support_indices).T
         return self.forwardOp * injection
+
 
 class VFWLasso(_GenericFWLasso):
     r"""
@@ -171,24 +166,24 @@ class VFWLasso(_GenericFWLasso):
     """
 
     def __init__(
-        self,
-        data: pxt.NDArray,
-        forwardOp: pxo.LinOp,
-        lambda_: float,
-        step_size: str = "optimal",
-        *,
-        folder=None,  # : typ.Optional[pyct.PathLike] = None,
-        exist_ok: bool = False,
-        stop_rate: int = 1,
-        writeback_rate: typ.Optional[int] = None,
-        verbosity: int = 50,
-        show_progress: bool = True,
-        log_var: pxt.VarName = (
-            "x",
-            "pos",
-            "val",
-            "dcv",
-        ),
+            self,
+            data: pxt.NDArray,
+            forwardOp: pxo.LinOp,
+            lambda_: float,
+            step_size: str = "optimal",
+            *,
+            folder=None,  # : typ.Optional[pyct.PathLike] = None,
+            exist_ok: bool = False,
+            stop_rate: int = 1,
+            writeback_rate: typ.Optional[int] = None,
+            verbosity: int = 50,
+            show_progress: bool = True,
+            log_var: pxt.VarName = (
+                    "x",
+                    "pos",
+                    "val",
+                    "dcv",
+            ),
     ):
         r"""
 
@@ -267,7 +262,8 @@ class VFWLasso(_GenericFWLasso):
         mst["lift_variable"] *= 1 - gamma
         if abs(dcv) > 1.0:
             if new_ind in mst["pos"]:
-                mst["val"][np.asarray(mst["pos"] == new_ind).nonzero()[0]] += pxrt.coerce(gamma * np.sign(dcv) * self._bound)
+                mst["val"][np.asarray(mst["pos"] == new_ind).nonzero()[0]] += pxrt.coerce(
+                    gamma * np.sign(dcv) * self._bound)
             else:
                 mst["pos"] = np.append(mst["pos"], new_ind)
                 mst["val"] = np.append(mst["val"], pxrt.coerce(gamma * np.sign(dcv) * self._bound))
@@ -320,29 +316,29 @@ class PFWLasso(_GenericFWLasso):
     """
 
     def __init__(
-        self,
-        data: pxt.NDArray,
-        forwardOp: pxo.LinOp,
-        lambda_: float,
-        ms_threshold: float = 0.7,  # multi spikes threshold at init
-        init_correction_prec: float = 0.2,
-        final_correction_prec: float = 1e-4,
-        remove_positions: bool = False,
-        min_correction_steps: int = 5,
-        max_correction_steps: int = 100,
-        *,
-        folder=None,  # : typ.Optional[pyct.PathLike] = None,
-        exist_ok: bool = False,
-        stop_rate: int = 1,
-        writeback_rate: typ.Optional[int] = None,
-        verbosity: int = 10,
-        show_progress: bool = True,
-        log_var: pxt.VarName = (
-            "x",
-            "pos",
-            "val",
-            "dcv",
-        ),
+            self,
+            data: pxt.NDArray,
+            forwardOp: pxo.LinOp,
+            lambda_: float,
+            ms_threshold: float = 0.7,  # multi spikes threshold at init
+            init_correction_prec: float = 0.2,
+            final_correction_prec: float = 1e-4,
+            remove_positions: bool = False,
+            min_correction_steps: int = 5,
+            max_correction_steps: int = 100,
+            *,
+            folder=None,  # : typ.Optional[pyct.PathLike] = None,
+            exist_ok: bool = False,
+            stop_rate: int = 1,
+            writeback_rate: typ.Optional[int] = None,
+            verbosity: int = 10,
+            show_progress: bool = True,
+            log_var: pxt.VarName = (
+                    "x",
+                    "pos",
+                    "val",
+                    "dcv",
+            ),
     ):
 
         r"""
@@ -391,9 +387,18 @@ class PFWLasso(_GenericFWLasso):
 
     def fit(self, **kwargs):
         self._astate["lock"] = kwargs.pop("lock_reweighting", False)
-        self._prec_rule = kwargs.pop("precision_rule", lambda k: 1/k)
-        super().fit(**kwargs)
+        self._prec_rule = kwargs.pop("precision_rule", lambda k: 1 / k)
 
+        l_constant = kwargs.pop("diff_lipschitz", None)
+        if l_constant is None:
+            lipschitz_time = time.time()
+            self._data_fidelity.estimate_diff_lipschitz(tol=1e-3)
+            print("Computation of diff_lipschitz takes {:.4f}".format(time.time() - lipschitz_time))
+        else:
+            print("diff_lipschitz constant provided.")
+            self._data_fidelity._diff_lipschitz = l_constant
+
+        super().fit(**kwargs)
 
     def m_init(self, **kwargs):
         super(PFWLasso, self).m_init(**kwargs)
@@ -448,9 +453,11 @@ class PFWLasso(_GenericFWLasso):
             if abs(corr) <= self.lambda_:
                 mst["val"] = xp.zeros(1, dtype=pxrt.getPrecision().value)
             elif corr > self.lambda_:
-                mst["val"] = np.r_[(corr - self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
+                mst["val"] = np.r_[
+                    (corr - self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
             else:
-                mst["val"] = np.r_[(corr + self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
+                mst["val"] = np.r_[
+                    (corr + self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
         else:
             mst["val"] = xp.array([], dtype=pxrt.getPrecision().value)
 
@@ -515,7 +522,7 @@ class PFWLasso(_GenericFWLasso):
         sol, _ = apgd.stats()
         return sol["x"]
 
-    def diagnostics(self, log: bool=False):
+    def diagnostics(self, log: bool = False):
         import matplotlib.pyplot as plt
 
         hist = self.stats()[1]
@@ -543,14 +550,14 @@ class PFWLasso(_GenericFWLasso):
         ax2.legend(lines + lines2, labels + labels2)
 
         ax = fig.add_subplot(247)
-        ax.plot(hist['duration'][1:], self._mstate["N_indices"], label="Support size", marker="x", alpha=.5,)
-        ax.plot(hist['duration'][1:], self._mstate["N_candidates"], label="candidates", marker="x", alpha=.5,)
+        ax.plot(hist['duration'][1:], self._mstate["N_indices"], label="Support size", marker="x", alpha=.5, )
+        ax.plot(hist['duration'][1:], self._mstate["N_candidates"], label="candidates", marker="x", alpha=.5, )
         ax.set_xlim(left=0.)
         ax.set_xlabel("Time (s)")
         ax.legend()
         ax = fig.add_subplot(248)
         ax.plot(hist['duration'][1:], self._mstate["correction_iterations"], label="iterations", marker=".",
-                 c='#2ca02c', alpha=.5)
+                c='#2ca02c', alpha=.5)
         ax.set_ylim(bottom=0.)
         ax.set_xlim(left=0.)
         ax.set_xlabel("Time (s)")
