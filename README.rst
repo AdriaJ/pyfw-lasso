@@ -39,3 +39,16 @@ Citation
 ========
 
 For citing this package, please refer to the Signal Processing Letters article: https://doi.org/10.1109/LSP.2022.3149377 .
+
+::
+
+   @article{jarret2022,
+       author={Jarret, Adrian and Fageot, Julien and Simeoni, Matthieu},
+       journal={IEEE Signal Processing Letters}, 
+       title={A Fast and Scalable Polyatomic Frank-Wolfe Algorithm for the LASSO}, 
+       year={2022},
+       volume={29},
+       pages={637-641},
+       doi={10.1109/LSP.2022.3149377}
+   }
+
