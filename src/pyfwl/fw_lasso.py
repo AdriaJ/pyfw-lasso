@@ -392,7 +392,7 @@ class PFWLasso(_GenericFWLasso):
         l_constant = kwargs.pop("diff_lipschitz", None)
         if l_constant is None:
             lipschitz_time = time.time()
-            self._data_fidelity.estimate_diff_lipschitz(tol=1e-3)
+            self._data_fidelity._diff_lipschitz = self._data_fidelity.estimate_diff_lipschitz(tol=1e-3)
             print("Computation of diff_lipschitz takes {:.4f}".format(time.time() - lipschitz_time))
         else:
             print("diff_lipschitz constant provided.")
@@ -407,6 +407,24 @@ class PFWLasso(_GenericFWLasso):
         mst["pos"] = xp.array([], dtype="int32")
         mst["delta"] = None  # initial buffer for multi spike thresholding
         mst["correction_prec"] = self._init_correction_prec
+
+    def find_candidates(self, mgrad: np.ndarray):
+        """
+        Method to identify the new atoms to be added to the support at each iteration. It selects all the locations that
+        are close to the maximum of the dual certificate, down to a given threshold.
+
+        maxi: float
+            Maximum value of the dual certificate (if positivity constraint is enforced, otherwise
+            maximum in absolute value).
+        """
+        mst = self._mstate
+        maxi = np.abs(mst["dcv"])
+        thresh = maxi - (2 / (self._astate["idx"] + 1)) * mst["delta"]
+        if self._astate["positivity_c"]:
+            new_indices = (mgrad > max(thresh, 1.0)).nonzero()[0]
+        else:
+            new_indices = (abs(mgrad) > max(thresh, 1.0)).nonzero()[0]
+        return new_indices
 
     def m_step(self):
         mst = self._mstate  # shorthand
@@ -424,11 +442,9 @@ class PFWLasso(_GenericFWLasso):
             mst["N_candidates"] = []
             mst["correction_iterations"] = []
             mst["correction_durations"] = []
-        thresh = maxi - (2 / (self._astate["idx"] + 1)) * mst["delta"]
-        if self._astate["positivity_c"]:
-            new_indices = (mgrad > max(thresh, 1.0)).nonzero()[0]
-        else:
-            new_indices = (abs(mgrad) > max(thresh, 1.0)).nonzero()[0]
+
+        new_indices = self.find_candidates(mgrad)
+
         mst["N_candidates"].append(new_indices.size)
 
         xp = pxu.get_array_module(mst["val"])
