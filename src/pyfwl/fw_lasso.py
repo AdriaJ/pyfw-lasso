@@ -458,8 +458,12 @@ class PFWLasso(_GenericFWLasso):
             else:
                 mst["val"] = np.r_[
                     (corr + self.lambda_) / pxop.SquaredL2Norm(dim=self.forwardOp.shape[0]).apply(column)[0]]
+            self._mstate["correction_iterations"].append(0)
+            self._mstate["correction_durations"].append(0)
         else:
             mst["val"] = xp.array([], dtype=pxrt.getPrecision().value)
+            self._mstate["correction_iterations"].append(0)
+            self._mstate["correction_durations"].append(0)
 
         if self._remove_positions:
             to_keep = (abs(mst["val"]) > 1e-5).nonzero()[0]
