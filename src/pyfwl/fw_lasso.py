@@ -326,6 +326,7 @@ class PFWLasso(_GenericFWLasso):
             remove_positions: bool = False,
             min_correction_steps: int = 5,
             max_correction_steps: int = 100,
+            record_certificate: int = None,
             *,
             folder=None,  # : typ.Optional[pyct.PathLike] = None,
             exist_ok: bool = False,
@@ -372,6 +373,9 @@ class PFWLasso(_GenericFWLasso):
         self._remove_positions = remove_positions
         self._min_correction_steps = min_correction_steps
         self._max_correction_steps = max_correction_steps
+        self._record_certificate = record_certificate
+        if self._record_certificate is not None:
+            self.certif_log = {'certificate': [], 'candidates': []}
         super().__init__(
             data=data,
             forwardOp=forwardOp,
@@ -446,6 +450,10 @@ class PFWLasso(_GenericFWLasso):
         new_indices = self.find_candidates(mgrad)
 
         mst["N_candidates"].append(new_indices.size)
+
+        if self._record_certificate is not None and self._astate["idx"] % self._record_certificate == 0:
+            self.certif_log['certificate'].append(mgrad)
+            self.certif_log['candidates'].append(new_indices)
 
         xp = pxu.get_array_module(mst["val"])
         if new_indices.size > 0:
